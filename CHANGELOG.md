@@ -1,5 +1,16 @@
 ## Phase 6 — Data Cleaning & Transformation
 
+## Phase 9 — Analytical Views & Materialized Reports
+
+### Added
+
+* Added reusable transaction analytical view over the validated clean layer.
+* Added daily and weekly fraud summaries.
+* Added fraud comparison, identity, device, card, and address-related attribute views.
+* Added deterministic risk-signal summary and transaction signal views.
+* Added view catalog, reconciliation validation, and Phase 9 final gate.
+* Evaluated materialized-view candidates; no materialized views were created because current workload evidence did not justify refreshable storage.
+
 ### Added
 
 * Created clean analytical layer:
