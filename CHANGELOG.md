@@ -96,3 +96,51 @@
   * Test D (Distribution Shift): WARNING (MEDIUM)
   * Test E (Fraud Rate Spike): WARNING (HIGH)
 * Phase 12 final validation gate: **PHASE 12 STATUS: PASS (15/15 checks passed)**.
+
+---
+
+## Phase 13 — Performance Tuning & Refinement
+
+### Added
+* Established `performance` schema with metadata tables:
+  * `performance.query_inventory` (10 cataloged analytical queries across Phases 9–12)
+  * `performance.index_recommendations` (7 evaluated B-Tree index candidates)
+  * `performance.optimization_candidates` (4 structured optimization paths)
+  * `performance.materialization_analysis` (4 evaluated materialization trade-offs)
+  * `performance.benchmark_results` (persistent storage for measured execution profiles)
+* Created targeted B-Tree indexes:
+  * `analytics.fact_transaction_clean`: `uq_fact_tx_clean_txid`, `idx_fact_tx_clean_amt_anomaly`, `idx_fact_tx_clean_day_fraud`, `idx_fact_tx_clean_product_fraud`, `idx_fact_tx_clean_card4_card6`
+  * `analytics.dim_identity_clean`: `uq_dim_id_clean_txid`, `pk_dim_id_clean_key`
+* Optimized primary analytical bottleneck `analytics.kpi_segmentation_summary`:
+  * Replaced 8-way `UNION ALL` scans with single-pass `LEFT JOIN analytics.dim_identity_clean` and `CROSS JOIN LATERAL (VALUES ...)` projection.
+* Added Phase 13 comprehensive performance report `docs/reports/phase_13_performance_report.md`.
+* Added Phase 13 final validation gate `sql/13_performance/09_phase_13_final_gate.sql`.
+
+### Benchmarks & Optimizations
+* Recorded verified baseline benchmarks:
+  * Q01 (`Daily Fraud Trend Summary`): 296.868 ms
+  * Q02 (`Amount Outlier Detection`): 39.809 ms (warm-cache)
+  * Q03 (`Identity Risk by Device Type`): 726.946 ms
+  * Q04 (`Card Network Risk Analysis`): 138.472 ms
+  * Q05 (`Executive KPI Segmentation Summary`): 69,900.616 ms
+* Measured post-optimization performance for Q05 (`kpi_segmentation_summary`):
+  * Baseline execution: 69,900.616 ms (~6.84M buffer reads across 8 scans)
+  * Optimized execution: 16,399.290 ms (1,166,917 buffer reads in single pass)
+  * Measured latency reduction: **76.54% (53,501.326 ms saved)**
+  * Buffer I/O reduction: **82.9% fewer shared read blocks**
+* Materialization candidate `analytics.mv_kpi_segmentation_summary` evaluated:
+  * Decision: **NO CHANGE** (Materialized view was not created; standard view rewrite delivered target performance without stale data risk).
+
+### Validation & Reconciliation
+* Result Reconciliation:
+  * Full two-way set comparison between original 8-branch UNION ALL logic and optimized single-pass LATERAL view across all 1,921 rows and 9 metrics.
+  * `Original EXCEPT Optimized`: 0 discrepancies.
+  * `Optimized EXCEPT Original`: 0 discrepancies.
+  * Status: **PASS**.
+* Targeted Regression:
+  * Phase 7: PASS (population 590,540 rows, 20,663 fraud, 79,738,948.735 total amount, 144,233 identity rows preserved).
+  * Phase 10: PASS (all required risk views active; source analytical input verified).
+  * Phase 11: PASS (all 7 required KPI views active; core KPI invariants confirmed).
+  * Phase 12: PASS (monitoring audit logs intact; 98/98 checks passed).
+* Final validation gate `09_phase_13_final_gate.sql`: **PHASE 13 STATUS: PASS (10/10 checks passed)**.
+
