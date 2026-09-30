@@ -273,3 +273,55 @@ staging.raw_transactions
         | 0 or 1
         |
 staging.raw_identity
+```
+
+---
+
+## 9. Analytical Clean Layer & Risk Feature Dictionary
+
+The following table documents the core analytical fields in the production analytical layer (`analytics.fact_transaction_clean`, `analytics.dim_identity_clean`, and derived views `vw_composed_risk_signals`, `vw_risk_scoring`, `vw_suspicious_transactions`, and `vw_suspicious_entities`), adhering to the standardized format:
+
+| Field | Table | Data Type | Description | Business Meaning |
+|---|---|---|---|---|
+| `TransactionID` | `analytics.fact_transaction_clean` | BIGINT | Unique natural transaction identifier from source | Primary business key for individual payment transaction |
+| `isFraud` | `analytics.fact_transaction_clean` | SMALLINT | Binary fraud ground truth indicator (0 = legitimate, 1 = fraudulent) | Target variable defining confirmed fraudulent chargeback or reported fraud event |
+| `TransactionDT` | `analytics.fact_transaction_clean` | BIGINT | Elapsed time in seconds from an undisclosed historical reference point | Relative temporal anchor used for sequencing and velocity calculations |
+| `TransactionAmt` | `analytics.fact_transaction_clean` | NUMERIC | Transaction value in original currency units | Direct gross financial exposure of the transaction |
+| `ProductCD` | `analytics.fact_transaction_clean` | TEXT | Categorical product identifier code (W, C, R, H, S) | High-level merchant line of business or transaction type |
+| `card1` | `analytics.fact_transaction_clean` | BIGINT | Anonymized primary payment card identifier / issuer routing code | Core proxy for user payment instrument |
+| `card4` | `analytics.fact_transaction_clean` | TEXT | Standardized card payment network (visa, mastercard, discover, american express) | Payment brand handling card clearing and settlement |
+| `card6` | `analytics.fact_transaction_clean` | TEXT | Standardized payment card tier/funding type (debit, credit, charge card) | Credit vs. debit exposure classification |
+| `P_emaildomain` | `analytics.fact_transaction_clean` | TEXT | Purchaser email domain, standardized to lowercase and trimmed | Counterparty contact identity and institutional domain reputation |
+| `R_emaildomain` | `analytics.fact_transaction_clean` | TEXT | Recipient email domain, standardized to lowercase and trimmed | Recipient entity identity for peer-to-peer or remittance payments |
+| `transaction_day_number` | `analytics.fact_transaction_clean` | INTEGER | Derived relative day sequence calculated as `FLOOR(TransactionDT / 86400) + 1` | Day of observation window (Days 1–183) for longitudinal trend analysis |
+| `transaction_hour` | `analytics.fact_transaction_clean` | INTEGER | Derived hour of day calculated as `FLOOR(TransactionDT / 3600) % 24` | Diurnal cycle marker (0–23) used for off-hours behavioral anomaly detection |
+| `transaction_week_number` | `analytics.fact_transaction_clean` | INTEGER | Derived relative week sequence calculated as `FLOOR(TransactionDT / 604800) + 1` | Weekly cohort grouping (Weeks 1–27) for volume and loss monitoring |
+| `transaction_amount_zero_flag` | `analytics.fact_transaction_clean` | INTEGER | Binary flag: 1 if `TransactionAmt = 0`, else 0 | Zero-amount authorization/card verification attempt |
+| `transaction_amount_log` | `analytics.fact_transaction_clean` | NUMERIC | Natural log transformation: `LN(TransactionAmt + 1)` | Log-scaled monetary metric to stabilize extreme skewness in regression and modeling |
+| `identity_available_flag` | `analytics.fact_transaction_clean` | INTEGER | Binary indicator: 1 if matching record exists in `dim_identity_clean`, else 0 | Digital footprint indicator differentiating web/app authenticated sessions from anonymous checkout |
+| `email_domain_missing_flag` | `analytics.fact_transaction_clean` | INTEGER | Binary indicator: 1 if `P_emaildomain` is NULL, else 0 | Missing contact attribute flag signaling elevated transaction anonymity |
+| `device_info_available_flag` | `analytics.fact_transaction_clean` | INTEGER | Binary indicator: 1 if `DeviceInfo` is populated, else 0 | Hardware telemetry presence indicator |
+| `card_attributes_missing_count` | `analytics.fact_transaction_clean` | INTEGER | Count of NULL values across `card2`, `card3`, `card5`, and `card6` (0 to 4) | Incomplete payment card tokenization metric |
+| `card_attributes_partial_missing_flag` | `analytics.fact_transaction_clean` | INTEGER | Binary flag: 1 if missing count is between 1 and 3, else 0 | Inconsistent or partial card metadata signal |
+| `dist2_missing_flag` | `analytics.fact_transaction_clean` | INTEGER | Binary indicator: 1 if secondary distance `dist2` is NULL, else 0 | Missing billing-to-shipping distance telemetry |
+| `d7_missing_flag` | `analytics.fact_transaction_clean` | INTEGER | Binary indicator: 1 if timedelta feature `D7` is NULL, else 0 | Missing elapsed transaction history flag |
+| `r_emaildomain_missing_flag` | `analytics.fact_transaction_clean` | INTEGER | Binary indicator: 1 if `R_emaildomain` is NULL, else 0 | Single-party vs two-party transaction flow indicator |
+| `identity_key` | `analytics.dim_identity_clean` | BIGINT | PostgreSQL-generated surrogate primary key | Unique entity identifier for authenticated digital session |
+| `TransactionID` | `analytics.dim_identity_clean` | BIGINT | Natural transaction identifier linking to `fact_transaction_clean` | Relational bridge linking identity dimension to payment event (1 : 0..1) |
+| `DeviceType` | `analytics.dim_identity_clean` | TEXT | High-level client platform type ('desktop', 'mobile') | Form factor classification for channel-specific risk modeling |
+| `DeviceInfo` | `analytics.dim_identity_clean` | TEXT | Raw hardware, browser, and OS telemetry string from client device | Granular client device signature |
+| `deviceinfo_normalized` | `analytics.dim_identity_clean` | TEXT | Trimmed, lowercase standardized device specification string | Clean device cluster key grouping identical hardware signatures |
+| `deviceinfo_missing_flag` | `analytics.dim_identity_clean` | INTEGER | Binary indicator: 1 if `DeviceInfo` is NULL within identity record, else 0 | Identity session with masked or uncollected user agent metadata |
+| `id_01` through `id_38` | `analytics.dim_identity_clean` | NUMERIC/TEXT | Anonymized biometric, network, and device risk attributes | Behavioral and network telemetry captured during authentication |
+| `velocity_flag` | `analytics.vw_composed_risk_signals` | INTEGER | 1 if >= 3 transactions observed for same identity within 24h window | High-frequency transaction burst suggesting card testing or bot automation |
+| `amount_anomaly_flag` | `analytics.vw_composed_risk_signals` | INTEGER | 1 if `TransactionAmt` exceeds identity 95th percentile baseline | Deviant high-ticket purchase relative to historical entity spending |
+| `entity_device_anomaly_flag` | `analytics.vw_composed_risk_signals` | INTEGER | 1 if device shared across multiple identities or identity hopping across devices | Device sharing or emulator device-spoofing signature |
+| `off_hours_risk_flag` | `analytics.vw_composed_risk_signals` | INTEGER | 1 if transaction executed during local overnight trough (02:00–06:00) | Higher-risk temporal window when manual authorization review is minimal |
+| `impossible_travel_flag` | `analytics.vw_composed_risk_signals` | INTEGER | 1 if speed between consecutive transactions exceeds 800 km/h (fixed 0) | Physical impossibility marker (documented limitation: coarse geolocation only) |
+| `signal_count` | `analytics.vw_composed_risk_signals` | INTEGER | Sum of active component risk flags (0 to 5) | Multi-vector threat density score |
+| `multiple_signal_flag` | `analytics.vw_composed_risk_signals` | INTEGER | 1 if `signal_count >= 2`, else 0 | Cross-dimensional composite risk trigger |
+| `risk_score` | `analytics.vw_risk_scoring` | INTEGER | Weighted additive score: `velocity*2 + amount*2 + device*2 + offhours*1 + travel*3` | Transparent heuristic prioritization rank (range 0 to 7) for alert triage |
+| `risk_band` | `analytics.vw_risk_scoring` | TEXT | Categorical triage tier: 'HIGH' (>=5), 'MEDIUM' (2-4), 'LOW' (<2) | Operational routing classification for automated hold, review, or pass |
+| `risk_reason` | `analytics.vw_risk_scoring` | TEXT | Concatenated string of active risk triggers | Explainable diagnostic summary explaining score derivation |
+| `is_suspicious_transaction` | `analytics.vw_suspicious_transactions` | INTEGER | 1 if `risk_score >= 2` (MEDIUM or HIGH band) | Operational alert trigger for fraud analysts |
+| `is_suspicious_entity` | `analytics.vw_suspicious_entities` | INTEGER | 1 if identity entity exhibits >= 2 flagged transactions or >= 1 fraud event | Entity-level blacklist/watchlist candidate |

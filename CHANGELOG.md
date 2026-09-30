@@ -142,5 +142,35 @@
   * Phase 10: PASS (all required risk views active; source analytical input verified).
   * Phase 11: PASS (all 7 required KPI views active; core KPI invariants confirmed).
   * Phase 12: PASS (monitoring audit logs intact; 98/98 checks passed).
-* Final validation gate `09_phase_13_final_gate.sql`: **PHASE 13 STATUS: PASS (10/10 checks passed)**.
+* Final validation gate `09_phase_13_final_gate.sql`: **PHASE 13 STATUS: PASS (11/11 checks passed)**.
 
+---
+
+## Phase 14 — Documentation & Repository Finalization
+
+### Added
+* Comprehensive repository entry point in `README.md` addressing all 19 required architectural and technical sections.
+* Complete entity-relationship diagram and schema boundaries in `docs/schema/erd.md` (Mermaid ERD + text architecture).
+* Standardized analytical clean layer and risk feature dictionary in `docs/profiling/data_dictionary.md` (Section 9).
+* Complete post-Phase 4 schema architecture documentation in `docs/schema/schema_design.md` (Section 18).
+* In-database ELT pipeline architecture documentation in `docs/schema/etl_pipeline.md`.
+* Complete fraud analytics detection patterns report in `docs/reports/phase_10_fraud_analytics.md`.
+* Standardized executive KPI catalog and business question answers in `docs/kpis/phase_11_kpi_documentation.md`.
+* Continuous quality auditing framework documentation in `docs/monitoring/phase_12_monitoring_framework.md`.
+* End-to-end practical execution and reproducibility guide in `docs/reproducibility.md`.
+* Platform requirements and sizing specification in `requirements.md`.
+* Phase 14 completion report `docs/reports/phase_14_completion_report.md`.
+* 20-point repository-level final validation gate `docs/reports/phase_14_final_gate.md`.
+
+### Security & Repository Hygiene
+* Enhanced `.gitignore` to explicitly ignore certificates (`*.pem`, `*.key`, `*.pfx`) and credential patterns (`*credential*`, `*secret*`, `*password*`).
+* Audited repository for credentials, passwords, temporary files, and dangling artifacts; verified 100% clean state.
+* Preserved all analytical SQL scripts across Phases 1–13 with zero modifications to underlying logic.
+
+### Validation
+* Phase 7 Targeted Invariants: **PASS** (590,540 fact rows, 144,233 identity rows, 20,663 fraud, $79,738,948.735 total volume).
+* Phase 10 Targeted Regression: **PASS** (All 9 risk views active; binary flags verified).
+* Phase 11 Targeted Regression: **PASS** (All 7 required KPI views active; core invariants confirmed).
+* Phase 12 Post-Optimization Monitoring: **98/98 PASS** (Run ID: `5dbd0f9d-f1bc-4454-b6d6-0d831c366cdb`).
+* Phase 13 Final Gate: **11/11 PASS**.
+* Phase 14 Final Gate: **20/20 PASS** (`PHASE 14 STATUS: PASS`).

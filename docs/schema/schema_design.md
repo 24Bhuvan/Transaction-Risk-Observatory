@@ -725,8 +725,6 @@ fact_transaction
 = 1 row per source transaction
 ```
 
-### Primary relationship
-
 ```text
 fact_transaction
        1
@@ -737,4 +735,42 @@ fact_transaction
 dim_identity
 ```
 
-**Status: Phase 4 schema design defined.**
+---
+
+## 18. Production Consolidated Architecture (Phases 6–13)
+
+Following Phases 6 through 13, the relational design matured into an enterprise four-schema topology:
+
+### 18.1 Multi-Schema Boundaries
+1. **`staging`**: Raw staging tables (`raw_transactions` [394 cols, 590,540 rows], `raw_identity` [41 cols, 144,233 rows]).
+2. **`analytics`**:
+   - Base relational layer (`fact_transaction`, `dim_identity`).
+   - Clean standardized analytical layer (`fact_transaction_clean`, `dim_identity_clean`).
+   - Feature engineering & view layer (33 views across core transaction analysis, risk signals, and executive KPIs).
+3. **`monitoring`**:
+   - Audit state tables (`monitoring_baseline`, `monitoring_results`, `distribution_snapshot`).
+   - 9 domain-specific monitoring views evaluating 98 data quality rules.
+   - Procedural engine `fn_record_monitoring_run(uuid)`.
+4. **`performance`**:
+   - Workload metadata tables (`query_inventory`, `index_recommendations`, `optimization_candidates`, `materialization_analysis`, `benchmark_results`).
+
+### 18.2 Clean Analytical Tables
+- `analytics.fact_transaction_clean`: Contains 412 total columns (394 source attributes + 18 feature engineered flags and numeric derivatives). Preserves 100% of transaction population (590,540 rows, 20,663 fraud, 569,877 non-fraud, $79,738,948.735 total volume).
+- `analytics.dim_identity_clean`: Contains 44 columns (41 source attributes + `identity_key` surrogate key, `deviceinfo_normalized`, `deviceinfo_missing_flag`). Preserves 144,233 identity sessions.
+
+### 18.3 Index Strategy
+Targeted B-Tree indexes enforce natural keys and accelerate analytical workloads:
+- `analytics.fact_transaction_clean`:
+  - `uq_fact_tx_clean_txid`: Unique natural key on `"TransactionID"`.
+  - `idx_fact_tx_clean_amt_anomaly`: Partial index on `"TransactionAmt"` WHERE `"TransactionAmt" >= 1000.00`.
+  - `idx_fact_tx_clean_day_fraud`: Composite index on `(transaction_day_number, "isFraud", "TransactionAmt")`.
+  - `idx_fact_tx_clean_product_fraud`: Composite index on `("ProductCD", "isFraud")`.
+  - `idx_fact_tx_clean_card4_card6`: Composite index on `(card4, card6, "isFraud")`.
+  - `idx_fact_transaction_clean_transactiondt`: B-Tree on `"TransactionDT"`.
+  - `idx_fact_transaction_clean_fraud_transactiondt`: Partial index on `("isFraud", "TransactionDT")` WHERE `"isFraud" = 1`.
+- `analytics.dim_identity_clean`:
+  - `uq_dim_id_clean_txid`: Unique key on `"TransactionID"`.
+  - `pk_dim_id_clean_key`: Primary key on `identity_key`.
+
+### 18.4 Final Architecture Status
+**Status: Production Schema Fully Implemented, Validated, and Monitored.**
